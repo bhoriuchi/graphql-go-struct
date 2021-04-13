@@ -10,32 +10,41 @@ func TestIntrospect(t *testing.T) {
 	const typeDefs = `
 	type Foo @struct(private: true) {
 		name: String!
-		description: String @struct(
+		description: [String] @struct(
 			private: true
 			name: "abcDescription"
 		)
 	}
 
 	type Bar @struct {
-		foo_value: Foo!
+		foo_value: [Foo!]
 	}
 	
-	type Query {
+	type Query @struct {
 		read_foo(
 			id: String!
-		): Foo
+		): Foo @struct(service: "Foo")
+	}
+
+	extend type Query @struct {
+		list_foo(
+			filter: String
+		): Foo @struct(service: "Foo")
+	}
+
+	type Mutation @struct {
 		create_foo(
 			name: String!
 			description: String
-		): Foo
+		): Foo @struct(service: "Foo")
 
 		update_foo(
 			name: String
 			description: String
-		): Foo
+		): Foo @struct(service: "Foo")
 	}
 	`
-	if err := Make(tools.ExecutableSchema{
+	if _, err := Make(tools.ExecutableSchema{
 		TypeDefs: []string{
 			typeDefs,
 		},

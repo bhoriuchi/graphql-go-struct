@@ -2,7 +2,6 @@ package gqlstruct
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 
 	tools "github.com/bhoriuchi/graphql-go-tools"
@@ -10,13 +9,25 @@ import (
 	"github.com/graphql-go/graphql/language/kinds"
 )
 
-var camelRx = regexp.MustCompile(`^([A-Z]+)([a-z])`)
-
 var primitiveMap = map[string]string{
 	"Int":     "int64",
 	"Float":   "float64",
 	"String":  "string",
 	"Boolean": "bool",
+}
+
+var protoMap = map[string]string{
+	"Int":     "int64",
+	"Float":   "float",
+	"String":  "string",
+	"Boolean": "bool",
+}
+
+var nullableProtoMap = map[string]string{
+	"Int":     "google.protobuf.Int64Value",
+	"Float":   "google.protobuf.DoubleValue",
+	"String":  "google.protobuf.StringValue",
+	"Boolean": "google.protobuf.BoolValue",
 }
 
 func getGoType(registry *Registry, name string) string {
@@ -26,6 +37,33 @@ func getGoType(registry *Registry, name string) string {
 
 	if def, found := registry.Structs[name]; found {
 		return def.Name
+	}
+
+	return ""
+}
+
+func getPrototype(registry *Registry, ft *FieldType) string {
+	baseName := ""
+	if prototype, found := protoMap[ft.gqltype]; found {
+		baseName = prototype
+	} else if def, found := registry.Structs[ft.gqltype]; found {
+		baseName = def.Name
+	}
+
+	if baseName != "" {
+		parts := []string{}
+		if ft.isList {
+			parts = append(parts, "repeated")
+		}
+		if !ft.isNonNull {
+			if wrapper, found := nullableProtoMap[ft.gqltype]; found {
+				parts = append(parts, wrapper)
+			}
+		} else {
+			parts = append(parts, baseName)
+		}
+
+		return strings.Join(parts, " ")
 	}
 
 	return ""
@@ -41,11 +79,12 @@ func getFieldType(registry *Registry, t ast.Type, ft *FieldType) *FieldType {
 		ft.isList = true
 		return getFieldType(registry, t.(*ast.List).Type, ft)
 	case kinds.NonNull:
-		ft.isNonNul = true
+		ft.isNonNull = true
 		return getFieldType(registry, t.(*ast.NonNull).Type, ft)
 	case kinds.Named:
 		ft.gqltype = t.(*ast.Named).Name.Value
 		ft.gotype = getGoType(registry, ft.gqltype)
+		ft.prototype = getPrototype(registry, ft)
 	}
 
 	return ft
